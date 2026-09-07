@@ -6,6 +6,266 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Calendario | Misión Jardines</title>
   <link rel="stylesheet" href="assets/css/style.css?v=20260730-3" />
+  <style>
+    /* =========================================================
+       CALENDARIO · RESPONSIVIDAD AISLADA
+       Evita que las reglas heredadas conviertan el mes en 2 columnas.
+       ========================================================= */
+    body.page-calendario {
+      display: block !important;
+      place-items: initial !important;
+      width: 100% !important;
+      min-width: 0 !important;
+      margin: 0 !important;
+      padding-top: 0 !important;
+      overflow-x: hidden !important;
+    }
+
+    .page-calendario .hero,
+    .page-calendario .section,
+    .page-calendario footer,
+    .page-calendario .layout,
+    .page-calendario .layout > *,
+    .page-calendario .card,
+    .page-calendario .form-grid,
+    .page-calendario .two,
+    .page-calendario .calendar-head,
+    .page-calendario .calendar-grid,
+    .page-calendario .event-list,
+    .page-calendario .event-card,
+    .page-calendario .event-card-content {
+      min-width: 0 !important;
+      max-width: 100%;
+    }
+
+    .page-calendario .calendar-grid {
+      width: 100%;
+      grid-template-columns: repeat(7, minmax(0, 1fr)) !important;
+    }
+
+    @media (max-width: 1180px) {
+      .page-calendario .layout {
+        grid-template-columns: minmax(0, 1fr) !important;
+      }
+    }
+
+    @media (max-width: 900px) {
+      body.page-calendario {
+        padding-top: 0 !important;
+      }
+
+      .page-calendario .hero,
+      .page-calendario .section {
+        width: 100% !important;
+        padding-left: 18px !important;
+        padding-right: 18px !important;
+      }
+
+      .page-calendario .grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+      }
+
+      .page-calendario .event-list {
+        grid-template-columns: minmax(0, 1fr) !important;
+      }
+
+      .page-calendario .event-card {
+        width: 100%;
+      }
+    }
+
+    @media (max-width: 640px) {
+      .page-calendario .hero {
+        padding-top: 26px !important;
+        padding-bottom: 12px !important;
+      }
+
+      .page-calendario .hero h1 {
+        font-size: 31px !important;
+        line-height: 1.08 !important;
+        letter-spacing: -1.1px !important;
+      }
+
+      .page-calendario .hero p,
+      .page-calendario .section-title p {
+        font-size: 14px !important;
+        line-height: 1.55 !important;
+      }
+
+      .page-calendario .section {
+        padding: 12px 14px 18px !important;
+      }
+
+      .page-calendario .grid,
+      .page-calendario .two {
+        grid-template-columns: minmax(0, 1fr) !important;
+      }
+
+      .page-calendario .card {
+        width: 100%;
+        padding: 14px !important;
+        border-radius: 15px !important;
+      }
+
+      .page-calendario .actions {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr);
+        width: 100%;
+        gap: 8px;
+      }
+
+      .page-calendario .actions button {
+        width: 100%;
+      }
+
+      .page-calendario .calendar-head {
+        display: block;
+        margin-bottom: 12px;
+      }
+
+      .page-calendario .calendar-title {
+        margin-bottom: 11px;
+        font-size: 22px;
+        text-align: center;
+      }
+
+      .page-calendario .calendar-actions {
+        width: 100%;
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 5px;
+      }
+
+      .page-calendario .calendar-actions button {
+        width: 100%;
+        min-width: 0;
+        min-height: 38px;
+        padding: 7px 4px !important;
+        font-size: 10px;
+        line-height: 1.15;
+        white-space: normal;
+      }
+
+      /* Mantener siempre la semana real: Domingo a Sábado. */
+      .page-calendario .calendar-grid {
+        display: grid !important;
+        grid-template-columns: repeat(7, minmax(0, 1fr)) !important;
+        gap: 3px !important;
+        width: 100%;
+      }
+
+      .page-calendario .day-name {
+        display: block !important;
+        min-width: 0;
+        padding: 6px 1px !important;
+        overflow: hidden;
+        border-radius: 8px !important;
+        font-size: 9px !important;
+        line-height: 1;
+        text-align: center;
+      }
+
+      .page-calendario .day {
+        min-width: 0;
+        min-height: 64px !important;
+        padding: 5px 3px !important;
+        overflow: hidden;
+        border-radius: 9px !important;
+      }
+
+      .page-calendario .day:hover {
+        transform: none !important;
+      }
+
+      .page-calendario .day-number {
+        margin-bottom: 4px !important;
+        font-size: 11px;
+        line-height: 1;
+        text-align: center;
+      }
+
+      /* En móvil los eventos se representan como barras de color.
+         Al tocarlas se conserva el mismo mensaje con el detalle. */
+      .page-calendario .event-pill {
+        display: block !important;
+        width: 100%;
+        height: 5px;
+        min-height: 5px;
+        margin-top: 3px !important;
+        padding: 0 !important;
+        overflow: hidden;
+        border: 0 !important;
+        border-radius: 999px !important;
+        font-size: 0 !important;
+        line-height: 0 !important;
+        text-shadow: none !important;
+      }
+
+      .page-calendario .event-card {
+        gap: 10px;
+        padding: 12px;
+      }
+
+      .page-calendario .event-date {
+        width: 50px;
+        height: 50px;
+        flex: 0 0 50px;
+        border-radius: 12px;
+        font-size: 12px;
+      }
+
+      .page-calendario .event-card-content h3 {
+        font-size: 14px;
+      }
+
+      .page-calendario .event-card .event-meta,
+      .page-calendario .event-card .event-description {
+        font-size: 11px;
+      }
+
+      .page-calendario footer {
+        padding: 28px 14px !important;
+        font-size: 11px;
+      }
+
+      .page-calendario .toast {
+        left: 12px;
+        right: 12px;
+        bottom: 12px;
+        max-width: none;
+      }
+    }
+
+    @media (max-width: 380px) {
+      .page-calendario .section {
+        padding-left: 10px !important;
+        padding-right: 10px !important;
+      }
+
+      .page-calendario .card {
+        padding: 11px !important;
+      }
+
+      .page-calendario .calendar-grid {
+        gap: 2px !important;
+      }
+
+      .page-calendario .day-name {
+        font-size: 8px !important;
+      }
+
+      .page-calendario .day {
+        min-height: 58px !important;
+        padding: 4px 2px !important;
+      }
+
+      .page-calendario .calendar-actions button {
+        font-size: 9px;
+        padding-left: 2px !important;
+        padding-right: 2px !important;
+      }
+    }
+  </style>
 </head>
 
 <body class="page-calendario">
