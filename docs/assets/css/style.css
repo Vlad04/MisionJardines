@@ -8577,13 +8577,55 @@ body.modal-open {
     justify-content: center;
   }
 
-  .page-cuotas .cuotas-metrics-grid,
+  .page-cuotas .cuotas-metrics-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 10px !important;
+  }
+
   .page-cuotas .cuotas-filters {
     grid-template-columns: 1fr !important;
   }
 
   .page-cuotas .cuotas-metric {
-    min-height: 110px;
+    min-width: 0;
+    min-height: 112px;
+    gap: 10px;
+    padding: 13px !important;
+  }
+
+  .page-cuotas .cuotas-metric-icon {
+    width: 38px;
+    height: 38px;
+    flex-basis: 38px;
+    border-radius: 11px;
+  }
+
+  .page-cuotas .cuotas-metric-icon svg {
+    width: 20px !important;
+    height: 20px !important;
+  }
+
+  .page-cuotas .cuotas-metric-content small {
+    font-size: 9px;
+  }
+
+  .page-cuotas .cuotas-metric-content strong {
+    display: block;
+    font-size: clamp(15px, 4.4vw, 20px);
+    line-height: 1.05;
+    white-space: nowrap;
+    overflow-wrap: normal;
+    word-break: normal;
+    letter-spacing: -0.4px;
+  }
+
+  .page-cuotas .cuotas-metric-content {
+    min-width: 0;
+    flex: 1;
+  }
+
+  .page-cuotas .cuotas-metric-content span {
+    font-size: 8px;
   }
 
   .page-cuotas .cuotas-table-heading {
@@ -8670,4 +8712,77 @@ body.page-cuotas .cuotas-table-card {
   border-color: #efbd86 !important;
   color: #d97706 !important;
   background: #fff8ef !important;
+}
+
+/* Directorio: carruseles horizontales en celular */
+@media (max-width:700px) {
+
+  body.page-directorio {
+    width: 100%;
+    max-width: 100%;
+    overflow-x: hidden !important;
+  }
+
+  .page-directorio .section {
+    min-width: 0;
+    max-width: 100%;
+    overflow: hidden;
+  }
+
+  .page-directorio .person-grid,
+  .page-directorio .directory-grid {
+    display: flex !important;
+    width: 100%;
+    max-width: 100%;
+    gap: 12px;
+    padding: 4px 18px 16px 2px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scroll-snap-type: x mandatory;
+    scroll-padding-left: 2px;
+    overscroll-behavior-x: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .page-directorio .person-grid .profile,
+  .page-directorio .directory-grid .directory-card {
+    width: auto;
+    min-width: 0;
+    flex: 0 0 min(82vw, 320px);
+    scroll-snap-align: start;
+    scroll-snap-stop: always;
+  }
+
+  .page-directorio .person-grid .profile {
+    min-height: 300px;
+  }
+
+  .page-directorio .directory-grid .directory-card {
+    min-height: 100%;
+  }
+
+  .page-directorio .person-grid::-webkit-scrollbar,
+  .page-directorio .directory-grid::-webkit-scrollbar {
+    height: 5px;
+  }
+
+  .page-directorio .person-grid::-webkit-scrollbar-track,
+  .page-directorio .directory-grid::-webkit-scrollbar-track {
+    border-radius: 999px;
+    background: #f1f3f7;
+  }
+
+  .page-directorio .person-grid::-webkit-scrollbar-thumb,
+  .page-directorio .directory-grid::-webkit-scrollbar-thumb {
+    border-radius: 999px;
+    background: #ef7d0b;
+  }
+}
+
+/* Teléfono de integrantes de la mesa directiva */
+.page-directorio .profile .chip.mesa {
+  color: #b45309 !important;
+  background: #fff3e6 !important;
+  border: 1px solid #f6cfaa !important;
+  box-shadow: none !important;
 }

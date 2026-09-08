@@ -25,7 +25,7 @@
     .page-calendario .section,
     .page-calendario footer,
     .page-calendario .layout,
-    .page-calendario .layout > *,
+    .page-calendario .layout>*,
     .page-calendario .card,
     .page-calendario .form-grid,
     .page-calendario .two,
@@ -273,7 +273,7 @@
         gap: 12px !important;
       }
 
-      .page-calendario .section .layout > .card {
+      .page-calendario .section .layout>.card {
         width: 100% !important;
         max-width: none !important;
         border-left: 0 !important;
@@ -292,7 +292,7 @@
         padding-right: 0 !important;
       }
 
-      .page-calendario section.section:last-of-type > .card {
+      .page-calendario section.section:last-of-type>.card {
         width: 100% !important;
         max-width: none !important;
         border-left: 0 !important;
@@ -310,17 +310,69 @@
         margin-right: -10px !important;
       }
 
-      .page-calendario .section .layout > .card,
-      .page-calendario section.section:last-of-type > .card {
+      .page-calendario .section .layout>.card,
+      .page-calendario section.section:last-of-type>.card {
         padding-left: 11px !important;
         padding-right: 11px !important;
+      }
+    }
+
+    /* Tarjetas métricas con colores pastel */
+    .page-calendario .grid .metric:nth-child(1) {
+      background: #eef8ff !important;
+      border-color: #d5e9f7 !important;
+    }
+
+    .page-calendario .grid .metric:nth-child(2) {
+      background: #effaf3 !important;
+      border-color: #d4eadc !important;
+    }
+
+    .page-calendario .grid .metric:nth-child(3) {
+      background: #fff8ea !important;
+      border-color: #f0dfbc !important;
+    }
+
+    .page-calendario .grid .metric:nth-child(4) {
+      background: #f7f2ff !important;
+      border-color: #e6daf4 !important;
+    }
+
+    /* Cuadrícula 2 × 2 en celular */
+    @media (max-width:640px) {
+      .page-calendario .grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+        gap: 10px !important;
+      }
+
+      .page-calendario .grid .metric {
+        min-width: 0;
+        min-height: 112px;
+        padding: 13px !important;
+      }
+
+      .page-calendario .grid .metric small {
+        font-size: 9px !important;
+      }
+
+      .page-calendario .grid .metric strong {
+        display: block;
+        margin: 5px 0;
+        font-size: 20px !important;
+        line-height: 1.05;
+        white-space: nowrap;
+      }
+
+      .page-calendario .grid .metric .hint {
+        font-size: 8px !important;
+        line-height: 1.35;
       }
     }
   </style>
 </head>
 
 <body class="page-calendario">
-<section class="hero">
+  <section class="hero">
     <div class="badge">📅 Organización comunitaria</div>
     <h1>Calendario de <span>Misión Jardines</span></h1>
     <p>
@@ -797,12 +849,12 @@
           <div class="event-card-actions">
             <span class="chip ${e.type}">${eventTypeLabel(e.type)}</span>
             ${e.fixed
-              ? `<span class="chip event-fixed">Evento fijo</span>`
-              : `<button class="btn-danger event-delete"
+            ? `<span class="chip event-fixed">Evento fijo</span>`
+            : `<button class="btn-danger event-delete"
                        onclick="deleteEvent('${e.id}')">
                        Eliminar
                      </button>`
-            }
+          }
           </div>
         </div>
       `;
