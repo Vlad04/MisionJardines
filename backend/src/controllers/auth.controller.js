@@ -1,11 +1,59 @@
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const crypto = require('crypto');
+const { Op } = require('sequelize');
+const sequelize = require('../config/database');
 
 const {
     Usuario,
     Rol,
-    Casa
+    Casa,
+    Condomino,
+    VerificacionCuenta,
+    SolicitudRol
 } = require('../models');
+const { enviarCodigoVerificacion } = require('../services/email.service');
+
+const EXPIRACION_CODIGO_MINUTOS = 15;
+const MAX_INTENTOS_CODIGO = 5;
+const ROLES_SOLICITABLES = new Set(['CONDOMINO', 'SEGURIDAD', 'ADMINISTRADOR']);
+const ROLES_REVISORES = new Set(['SUPER_ADMIN', 'ADMINISTRADOR']);
+
+function normalizarCorreo(valor) {
+    return String(valor || '').trim().toLowerCase();
+}
+
+function codigoHash(correo, codigo) {
+    return crypto
+        .createHash('sha256')
+        .update(`${normalizarCorreo(correo)}:${codigo}:${process.env.JWT_SECRET}`)
+        .digest('hex');
+}
+
+function generarCodigo() {
+    return String(crypto.randomInt(0, 1000000)).padStart(6, '0');
+}
+
+function contrasenaSegura(contrasena) {
+    return typeof contrasena === 'string'
+        && contrasena.length >= 8
+        && /[a-z]/.test(contrasena)
+        && /[A-Z]/.test(contrasena)
+        && /\d/.test(contrasena);
+}
+
+function nombreCompleto(usuario) {
+    return [usuario?.nombre, usuario?.apellidoPaterno, usuario?.apellidoMaterno]
+        .filter(Boolean)
+        .join(' ');
+}
+
+function perfilInclude() {
+    return [
+        { model: Rol, as: 'rol', attributes: ['id', 'nombre', 'descripcion'] },
+        { model: Casa, as: 'casa', attributes: ['id', 'numero', 'calle', 'nombre'] }
+    ];
+}
 
 async function iniciarSesion(req, res) {
     try {
@@ -177,7 +225,365 @@ async function obtenerPerfil(req, res) {
     }
 }
 
+async function listarViviendasRegistro(req, res) {
+    try {
+        const casas = await Casa.findAll({
+            attributes: ['id', 'calle', 'numero'],
+            order: [['calle', 'ASC'], ['numero', 'ASC']]
+        });
+        return res.json({ ok: true, casas });
+    } catch (error) {
+        console.error('Error al listar viviendas para registro:', error);
+        return res.status(500).json({ ok: false, message: 'No fue posible consultar las viviendas' });
+    }
+}
+
+async function solicitarRegistro(req, res) {
+    try {
+        const correo = normalizarCorreo(req.body.correo);
+        const nombre = String(req.body.nombre || '').trim();
+        const apellidoPaterno = String(req.body.apellidoPaterno || '').trim();
+        const apellidoMaterno = String(req.body.apellidoMaterno || '').trim();
+        const telefono = String(req.body.telefono || '').trim();
+        const contrasena = req.body.contrasena;
+        const casaId = Number(req.body.casaId);
+
+        if (!correo || !/^\S+@\S+\.\S+$/.test(correo) || !nombre || !apellidoPaterno || !casaId) {
+            return res.status(400).json({ ok: false, message: 'Completa nombre, apellido, correo y vivienda' });
+        }
+        if (!contrasenaSegura(contrasena)) {
+            return res.status(400).json({ ok: false, message: 'La contraseña debe tener 8 caracteres, mayúscula, minúscula y número' });
+        }
+
+        const [casa, correoExistente, correoRegistradoAntes, condomino] = await Promise.all([
+            Casa.findByPk(casaId, { attributes: ['id', 'calle', 'numero', 'correo'] }),
+            Usuario.findOne({ where: { correo } }),
+            VerificacionCuenta.findOne({
+                where: { tipo: 'REGISTRO', correo, consumidoEn: { [Op.ne]: null } },
+                attributes: ['id']
+            }),
+            Condomino.findOne({
+                where: { direccionId: casaId, correo, activo: true },
+                attributes: ['id']
+            })
+        ]);
+        if (!casa) return res.status(404).json({ ok: false, message: 'La vivienda seleccionada no existe' });
+        if (correoExistente || correoRegistradoAntes) {
+            return res.status(409).json({ ok: false, message: 'Ese correo ya fue utilizado para registrar una cuenta' });
+        }
+        if (!condomino && normalizarCorreo(casa.correo) !== correo) {
+            return res.status(403).json({
+                ok: false,
+                message: 'El correo no coincide con el padrón de esa vivienda. Solicita a administración actualizarlo.'
+            });
+        }
+
+        const codigo = generarCodigo();
+        const datosJson = JSON.stringify({
+            nombre, apellidoPaterno, apellidoMaterno: apellidoMaterno || null,
+            telefono: telefono || null,
+            contrasenaHash: await bcrypt.hash(contrasena, 12)
+        });
+        await VerificacionCuenta.destroy({ where: { tipo: 'REGISTRO', correo, consumidoEn: null } });
+        await VerificacionCuenta.create({
+            tipo: 'REGISTRO', casaId, correo, datosJson,
+            codigoHash: codigoHash(correo, codigo),
+            expiraEn: new Date(Date.now() + EXPIRACION_CODIGO_MINUTOS * 60000)
+        });
+        await enviarCodigoVerificacion({ destinatario: correo, codigo, nombre, motivo: 'registro' });
+
+        return res.status(202).json({
+            ok: true,
+            message: 'Enviamos un código de seis dígitos a tu correo',
+            correo,
+            expiraEnMinutos: EXPIRACION_CODIGO_MINUTOS
+        });
+    } catch (error) {
+        console.error('Error al solicitar registro:', error);
+        return res.status(500).json({ ok: false, message: 'No fue posible enviar el código de verificación' });
+    }
+}
+
+async function verificarRegistro(req, res) {
+    const correo = normalizarCorreo(req.body.correo);
+    const codigo = String(req.body.codigo || '').trim();
+    if (!correo || !/^\d{6}$/.test(codigo)) {
+        return res.status(400).json({ ok: false, message: 'Escribe el correo y el código de seis dígitos' });
+    }
+
+    const transaction = await sequelize.transaction();
+    try {
+        const verificacion = await VerificacionCuenta.findOne({
+            where: { tipo: 'REGISTRO', correo, consumidoEn: null },
+            order: [['id', 'DESC']],
+            transaction,
+            lock: transaction.LOCK.UPDATE
+        });
+        if (!verificacion || verificacion.expiraEn <= new Date()) {
+            await transaction.rollback();
+            return res.status(410).json({ ok: false, message: 'El código venció. Solicita uno nuevo.' });
+        }
+        if (verificacion.intentos >= MAX_INTENTOS_CODIGO) {
+            await transaction.rollback();
+            return res.status(429).json({ ok: false, message: 'Código bloqueado por demasiados intentos. Solicita uno nuevo.' });
+        }
+        if (verificacion.codigoHash !== codigoHash(correo, codigo)) {
+            await verificacion.increment('intentos', { transaction });
+            await transaction.commit();
+            return res.status(400).json({ ok: false, message: 'El código no es correcto' });
+        }
+
+        const [rol, correoExistente] = await Promise.all([
+            Rol.findOne({ where: { nombre: 'CONDOMINO', activo: true }, transaction }),
+            Usuario.findOne({ where: { correo }, transaction })
+        ]);
+        if (!rol) throw new Error('No existe el rol CONDOMINO');
+        if (correoExistente) {
+            await transaction.rollback();
+            return res.status(409).json({ ok: false, message: 'Ese correo ya tiene una cuenta registrada' });
+        }
+
+        const datos = JSON.parse(verificacion.datosJson || '{}');
+        await Usuario.create({
+            casaId: verificacion.casaId,
+            rolId: rol.id,
+            nombre: datos.nombre,
+            apellidoPaterno: datos.apellidoPaterno,
+            apellidoMaterno: datos.apellidoMaterno,
+            telefono: datos.telefono,
+            correo,
+            contrasenaHash: datos.contrasenaHash,
+            estatus: 'ACTIVO',
+            esContactoPrincipal: true,
+            recibeCorreosPago: true
+        }, { transaction });
+        await verificacion.update({
+            consumidoEn: new Date(),
+            datosJson: null,
+            codigoHash: crypto.randomBytes(32).toString('hex')
+        }, { transaction });
+        await transaction.commit();
+        return res.status(201).json({ ok: true, message: 'Cuenta verificada y activada. Ya puedes iniciar sesión.' });
+    } catch (error) {
+        if (!transaction.finished) await transaction.rollback();
+        console.error('Error al verificar registro:', error);
+        return res.status(500).json({ ok: false, message: 'No fue posible activar la cuenta' });
+    }
+}
+
+async function actualizarPerfil(req, res) {
+    try {
+        const usuario = await Usuario.findByPk(req.usuario.usuarioId);
+        if (!usuario) return res.status(404).json({ ok: false, message: 'Usuario no encontrado' });
+        const nombre = String(req.body.nombre || '').trim();
+        const apellidoPaterno = String(req.body.apellidoPaterno || '').trim();
+        if (!nombre || !apellidoPaterno) {
+            return res.status(400).json({ ok: false, message: 'Nombre y apellido paterno son obligatorios' });
+        }
+        await usuario.update({
+            nombre,
+            apellidoPaterno,
+            apellidoMaterno: String(req.body.apellidoMaterno || '').trim() || null,
+            telefono: String(req.body.telefono || '').trim() || null,
+            actualizadoEn: new Date()
+        });
+        const perfil = await Usuario.findByPk(usuario.id, { include: perfilInclude() });
+        return res.json({ ok: true, message: 'Datos personales actualizados', usuario: perfil });
+    } catch (error) {
+        console.error('Error al actualizar perfil:', error);
+        return res.status(500).json({ ok: false, message: 'No fue posible actualizar tus datos' });
+    }
+}
+
+async function cambiarContrasena(req, res) {
+    try {
+        const actual = req.body.contrasenaActual;
+        const nueva = req.body.contrasenaNueva;
+        if (!contrasenaSegura(nueva)) {
+            return res.status(400).json({ ok: false, message: 'La nueva contraseña debe tener 8 caracteres, mayúscula, minúscula y número' });
+        }
+        const usuario = await Usuario.scope('conContrasena').findByPk(req.usuario.usuarioId);
+        if (!usuario || !(await bcrypt.compare(actual || '', usuario.contrasenaHash))) {
+            return res.status(401).json({ ok: false, message: 'La contraseña actual no es correcta' });
+        }
+        await usuario.update({ contrasenaHash: await bcrypt.hash(nueva, 12), actualizadoEn: new Date() });
+        return res.json({ ok: true, message: 'Contraseña actualizada correctamente' });
+    } catch (error) {
+        console.error('Error al cambiar contraseña:', error);
+        return res.status(500).json({ ok: false, message: 'No fue posible cambiar la contraseña' });
+    }
+}
+
+async function solicitarCambioCorreo(req, res) {
+    try {
+        const correo = normalizarCorreo(req.body.correoNuevo);
+        const usuario = await Usuario.scope('conContrasena').findByPk(req.usuario.usuarioId);
+        if (!correo || !/^\S+@\S+\.\S+$/.test(correo)) {
+            return res.status(400).json({ ok: false, message: 'Escribe un correo válido' });
+        }
+        if (!usuario || !(await bcrypt.compare(req.body.contrasenaActual || '', usuario.contrasenaHash))) {
+            return res.status(401).json({ ok: false, message: 'La contraseña actual no es correcta' });
+        }
+        if (correo === usuario.correo) return res.status(400).json({ ok: false, message: 'Ese ya es tu correo actual' });
+        if (await Usuario.findOne({ where: { correo } })) {
+            return res.status(409).json({ ok: false, message: 'Ese correo ya está registrado' });
+        }
+        const codigo = generarCodigo();
+        await VerificacionCuenta.destroy({ where: { tipo: 'CAMBIO_CORREO', usuarioId: usuario.id, consumidoEn: null } });
+        await VerificacionCuenta.create({
+            tipo: 'CAMBIO_CORREO', usuarioId: usuario.id, casaId: usuario.casaId,
+            correo, codigoHash: codigoHash(correo, codigo),
+            expiraEn: new Date(Date.now() + EXPIRACION_CODIGO_MINUTOS * 60000)
+        });
+        await enviarCodigoVerificacion({ destinatario: correo, codigo, nombre: nombreCompleto(usuario), motivo: 'cambio_correo' });
+        return res.status(202).json({ ok: true, message: 'Enviamos el código al nuevo correo', correo });
+    } catch (error) {
+        console.error('Error al solicitar cambio de correo:', error);
+        return res.status(500).json({ ok: false, message: 'No fue posible enviar el código' });
+    }
+}
+
+async function verificarCambioCorreo(req, res) {
+    const correo = normalizarCorreo(req.body.correoNuevo);
+    const codigo = String(req.body.codigo || '').trim();
+    const transaction = await sequelize.transaction();
+    try {
+        const verificacion = await VerificacionCuenta.findOne({
+            where: { tipo: 'CAMBIO_CORREO', usuarioId: req.usuario.usuarioId, correo, consumidoEn: null },
+            order: [['id', 'DESC']], transaction, lock: transaction.LOCK.UPDATE
+        });
+        if (!verificacion || verificacion.expiraEn <= new Date()) {
+            await transaction.rollback();
+            return res.status(410).json({ ok: false, message: 'El código venció. Solicita uno nuevo.' });
+        }
+        if (verificacion.intentos >= MAX_INTENTOS_CODIGO) {
+            await transaction.rollback();
+            return res.status(429).json({ ok: false, message: 'Código bloqueado. Solicita uno nuevo.' });
+        }
+        if (!/^\d{6}$/.test(codigo) || verificacion.codigoHash !== codigoHash(correo, codigo)) {
+            await verificacion.increment('intentos', { transaction });
+            await transaction.commit();
+            return res.status(400).json({ ok: false, message: 'El código no es correcto' });
+        }
+        if (await Usuario.findOne({ where: { correo, id: { [Op.ne]: req.usuario.usuarioId } }, transaction })) {
+            await transaction.rollback();
+            return res.status(409).json({ ok: false, message: 'Ese correo ya fue registrado' });
+        }
+        await Usuario.update({ correo, actualizadoEn: new Date() }, { where: { id: req.usuario.usuarioId }, transaction });
+        await verificacion.update({ consumidoEn: new Date() }, { transaction });
+        await transaction.commit();
+        return res.json({ ok: true, message: 'Correo actualizado correctamente', correo });
+    } catch (error) {
+        if (!transaction.finished) await transaction.rollback();
+        console.error('Error al verificar nuevo correo:', error);
+        return res.status(500).json({ ok: false, message: 'No fue posible actualizar el correo' });
+    }
+}
+
+async function crearSolicitudRol(req, res) {
+    try {
+        const rolSolicitado = String(req.body.rolSolicitado || '').toUpperCase();
+        const motivo = String(req.body.motivo || '').trim();
+        if (!ROLES_SOLICITABLES.has(rolSolicitado) || motivo.length < 10) {
+            return res.status(400).json({ ok: false, message: 'Selecciona un rol y explica el motivo con al menos 10 caracteres' });
+        }
+        const usuarioActual = await Usuario.findByPk(req.usuario.usuarioId, {
+            include: [{ model: Rol, as: 'rol', attributes: ['nombre'] }]
+        });
+        if (!usuarioActual || usuarioActual.estatus !== 'ACTIVO') {
+            return res.status(403).json({ ok: false, message: 'La cuenta no está activa' });
+        }
+        if (usuarioActual.rol?.nombre === rolSolicitado) {
+            return res.status(400).json({ ok: false, message: 'Ya tienes ese rol asignado' });
+        }
+        if (await SolicitudRol.findOne({ where: { usuarioId: req.usuario.usuarioId, estatus: 'PENDIENTE' } })) {
+            return res.status(409).json({ ok: false, message: 'Ya tienes una solicitud pendiente de revisión' });
+        }
+        const solicitud = await SolicitudRol.create({ usuarioId: req.usuario.usuarioId, rolSolicitado, motivo });
+        return res.status(201).json({ ok: true, message: 'Solicitud enviada a administración', solicitud });
+    } catch (error) {
+        console.error('Error al solicitar rol:', error);
+        return res.status(500).json({ ok: false, message: 'No fue posible enviar la solicitud' });
+    }
+}
+
+async function listarSolicitudesRol(req, res) {
+    try {
+        const usuarioActual = await Usuario.findByPk(req.usuario.usuarioId, {
+            include: [{ model: Rol, as: 'rol', attributes: ['nombre'] }]
+        });
+        const esRevisor = ROLES_REVISORES.has(usuarioActual?.rol?.nombre);
+        const where = esRevisor ? { estatus: 'PENDIENTE' } : { usuarioId: req.usuario.usuarioId };
+        const solicitudes = await SolicitudRol.findAll({
+            where,
+            include: esRevisor ? [{
+                model: Usuario, as: 'usuario',
+                attributes: ['id', 'nombre', 'apellidoPaterno', 'correo'],
+                include: [{ model: Casa, as: 'casa', attributes: ['calle', 'numero'] }]
+            }] : [],
+            order: [['creadoEn', 'DESC']],
+            limit: esRevisor ? 100 : 10
+        });
+        return res.json({ ok: true, solicitudes, puedeRevisar: esRevisor });
+    } catch (error) {
+        console.error('Error al listar solicitudes de rol:', error);
+        return res.status(500).json({ ok: false, message: 'No fue posible consultar las solicitudes' });
+    }
+}
+
+async function revisarSolicitudRol(req, res) {
+    const revisor = await Usuario.findByPk(req.usuario.usuarioId, {
+        include: [{ model: Rol, as: 'rol', attributes: ['nombre'] }]
+    });
+    if (!revisor || revisor.estatus !== 'ACTIVO' || !ROLES_REVISORES.has(revisor.rol?.nombre)) {
+        return res.status(403).json({ ok: false, message: 'No tienes permiso para revisar solicitudes' });
+    }
+    const accion = String(req.body.accion || '').toUpperCase();
+    if (!['APROBAR', 'RECHAZAR'].includes(accion)) {
+        return res.status(400).json({ ok: false, message: 'Acción inválida' });
+    }
+    const transaction = await sequelize.transaction();
+    try {
+        const solicitud = await SolicitudRol.findByPk(req.params.id, { transaction, lock: transaction.LOCK.UPDATE });
+        if (!solicitud || solicitud.estatus !== 'PENDIENTE') {
+            await transaction.rollback();
+            return res.status(404).json({ ok: false, message: 'La solicitud ya no está pendiente' });
+        }
+        if (String(solicitud.usuarioId) === String(req.usuario.usuarioId)) {
+            await transaction.rollback();
+            return res.status(403).json({ ok: false, message: 'Otra persona administradora debe revisar tu solicitud' });
+        }
+        if (accion === 'APROBAR') {
+            const rol = await Rol.findOne({ where: { nombre: solicitud.rolSolicitado, activo: true }, transaction });
+            if (!rol) throw new Error(`No existe el rol ${solicitud.rolSolicitado}`);
+            await Usuario.update({ rolId: rol.id, actualizadoEn: new Date() }, { where: { id: solicitud.usuarioId }, transaction });
+        }
+        await solicitud.update({
+            estatus: accion === 'APROBAR' ? 'APROBADA' : 'RECHAZADA',
+            revisadoPorUsuarioId: req.usuario.usuarioId,
+            comentarioRevision: String(req.body.comentario || '').trim() || null,
+            revisadoEn: new Date()
+        }, { transaction });
+        await transaction.commit();
+        return res.json({ ok: true, message: accion === 'APROBAR' ? 'Rol aprobado. El usuario deberá iniciar sesión nuevamente.' : 'Solicitud rechazada' });
+    } catch (error) {
+        if (!transaction.finished) await transaction.rollback();
+        console.error('Error al revisar solicitud:', error);
+        return res.status(500).json({ ok: false, message: 'No fue posible revisar la solicitud' });
+    }
+}
+
 module.exports = {
     iniciarSesion,
-    obtenerPerfil
+    obtenerPerfil,
+    listarViviendasRegistro,
+    solicitarRegistro,
+    verificarRegistro,
+    actualizarPerfil,
+    cambiarContrasena,
+    solicitarCambioCorreo,
+    verificarCambioCorreo,
+    crearSolicitudRol,
+    listarSolicitudesRol,
+    revisarSolicitudRol
 };
