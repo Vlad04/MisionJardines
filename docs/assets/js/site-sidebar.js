@@ -171,6 +171,15 @@
     location.replace('login.html');
   }
 
+  function loadHomeDashboard() {
+    if (page() !== 'index.html' || document.querySelector('script[data-mj-home-dashboard]')) return;
+    const script = document.createElement('script');
+    script.src = 'assets/js/home-dashboard.js?v=20260908';
+    script.defer = true;
+    script.dataset.mjHomeDashboard = 'true';
+    document.body.appendChild(script);
+  }
+
   function init() {
     const body = document.body;
     if (!body || body.dataset.sharedSidebarReady === 'true') return;
@@ -190,6 +199,8 @@
       script.dataset.houseFields = 'true';
       document.body.appendChild(script);
     }
+
+    loadHomeDashboard();
 
     document.querySelector('.mj-side-tab')?.remove();
     const button = document.createElement('button');
