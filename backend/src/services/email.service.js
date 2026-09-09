@@ -205,7 +205,57 @@ async function enviarReciboPorCorreo({
     };
 }
 
+async function enviarCodigoVerificacion({
+    destinatario,
+    codigo,
+    nombre,
+    motivo = 'registro'
+}) {
+    const transportador = crearTransportador();
+    const esCambio = motivo === 'cambio_correo';
+    const titulo = esCambio
+        ? 'Confirma tu nuevo correo'
+        : 'Verifica tu cuenta';
+    const descripcion = esCambio
+        ? 'Solicitaste cambiar el correo de tu cuenta en Misión Jardines.'
+        : 'Estás a un paso de activar tu cuenta residencial en Misión Jardines.';
+
+    await enviarConReintento(transportador, {
+        from: {
+            name: process.env.SMTP_FROM_NAME || 'Administración Misión Jardines',
+            address: process.env.SMTP_FROM_EMAIL
+        },
+        to: destinatario,
+        subject: `${codigo} · ${titulo} | Misión Jardines`,
+        text:
+            `Hola ${nombre || 'residente'},\n\n${descripcion}\n\n` +
+            `Tu código de verificación es: ${codigo}\n\n` +
+            'El código vence en 15 minutos. Si no solicitaste este cambio, ignora este mensaje.',
+        html:
+            '<div style="margin:0;padding:32px;background:#f6f7fb;font-family:Arial,sans-serif;color:#27324a">' +
+                '<div style="max-width:580px;margin:auto;overflow:hidden;border:1px solid #e5e7ee;border-radius:20px;background:#fff">' +
+                    '<div style="padding:24px 30px;background:linear-gradient(135deg,#fff4e8,#f4f6ff)">' +
+                        '<div style="font-size:11px;letter-spacing:1.4px;color:#d76500;font-weight:800">MISIÓN JARDINES</div>' +
+                        '<h1 style="margin:8px 0 0;font-size:25px;color:#20283d">' + escaparHtml(titulo) + '</h1>' +
+                    '</div>' +
+                    '<div style="padding:28px 30px">' +
+                        '<p style="margin-top:0;font-size:15px;line-height:1.65">Hola <strong>' + escaparHtml(nombre || 'residente') + '</strong>.</p>' +
+                        '<p style="font-size:14px;line-height:1.65;color:#667188">' + escaparHtml(descripcion) + '</p>' +
+                        '<div style="margin:24px 0;padding:20px;border:1px solid #f3d2b3;border-radius:15px;background:#fff8f1;text-align:center">' +
+                            '<div style="font-size:10px;letter-spacing:1.2px;color:#8a6b50;font-weight:800">CÓDIGO DE VERIFICACIÓN</div>' +
+                            '<div style="margin-top:9px;font-size:34px;letter-spacing:8px;color:#e87100;font-weight:900">' + escaparHtml(codigo) + '</div>' +
+                        '</div>' +
+                        '<p style="margin-bottom:0;font-size:12px;line-height:1.6;color:#8a92a3">Vence en 15 minutos. Nunca compartas este código con otra persona.</p>' +
+                    '</div>' +
+                '</div>' +
+            '</div>'
+    });
+
+    return { enviado: true };
+}
+
 module.exports = {
     enviarReciboPorCorreo,
+    enviarCodigoVerificacion,
     validarConfiguracionSmtp
 };

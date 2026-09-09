@@ -1,8 +1,19 @@
 const express = require('express');
+const rateLimit = require('express-rate-limit');
 
 const {
     iniciarSesion,
-    obtenerPerfil
+    obtenerPerfil,
+    listarViviendasRegistro,
+    solicitarRegistro,
+    verificarRegistro,
+    actualizarPerfil,
+    cambiarContrasena,
+    solicitarCambioCorreo,
+    verificarCambioCorreo,
+    crearSolicitudRol,
+    listarSolicitudesRol,
+    revisarSolicitudRol
 } = require('../controllers/auth.controller');
 
 const {
@@ -10,13 +21,31 @@ const {
 } = require('../middlewares/auth.middleware');
 
 const router = express.Router();
+const codigoLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    limit: 6,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { ok: false, message: 'Demasiadas solicitudes. Espera 15 minutos e inténtalo nuevamente.' }
+});
 
 router.post('/login', iniciarSesion);
+router.get('/registro/viviendas', listarViviendasRegistro);
+router.post('/registro/solicitar', codigoLimiter, solicitarRegistro);
+router.post('/registro/verificar', codigoLimiter, verificarRegistro);
 
 router.get(
     '/perfil',
     autenticarToken,
     obtenerPerfil
 );
+
+router.patch('/perfil', autenticarToken, actualizarPerfil);
+router.patch('/perfil/contrasena', autenticarToken, cambiarContrasena);
+router.post('/perfil/correo/solicitar', autenticarToken, codigoLimiter, solicitarCambioCorreo);
+router.post('/perfil/correo/verificar', autenticarToken, codigoLimiter, verificarCambioCorreo);
+router.get('/solicitudes-rol', autenticarToken, listarSolicitudesRol);
+router.post('/solicitudes-rol', autenticarToken, crearSolicitudRol);
+router.patch('/solicitudes-rol/:id', autenticarToken, revisarSolicitudRol);
 
 module.exports = router;
