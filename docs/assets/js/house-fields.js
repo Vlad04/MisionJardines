@@ -34,10 +34,50 @@
       .page-bases-datos .database-toolbar { grid-template-columns: minmax(190px,1.25fr) minmax(155px,.8fr) minmax(115px,.55fr) auto; }
       .page-reportes .filters, .page-visitas .filters { grid-template-columns: repeat(5,minmax(120px,1fr)) auto; }
       #userHouseBox { gap: 10px; }
+
+      .page-visitas-v2 .modal-shell {
+        height: 100dvh;
+        min-height: 100dvh;
+        overflow-y: auto;
+        overscroll-behavior: contain;
+      }
+      .page-visitas-v2 .modal-box {
+        max-height: calc(100dvh - 48px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
+      }
+      .page-visitas-v2 .modal-body {
+        flex: 1 1 auto;
+        min-height: 0;
+        overscroll-behavior: contain;
+        -webkit-overflow-scrolling: touch;
+      }
+
       @media (max-width: 980px) {
         .page-bases-datos .database-toolbar,
         .page-reportes .filters,
         .page-visitas .filters { grid-template-columns: repeat(2,minmax(0,1fr)); }
+      }
+      @media (max-width: 720px) {
+        .page-visitas-v2 .modal-shell {
+          place-items: start center;
+          padding-top: max(10px, env(safe-area-inset-top, 0px));
+          padding-right: 10px;
+          padding-bottom: max(18px, env(safe-area-inset-bottom, 0px));
+          padding-left: 10px;
+        }
+        .page-visitas-v2 .modal-box {
+          width: 100%;
+          max-height: calc(100dvh - 28px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
+        }
+        .page-visitas-v2 .modal-body {
+          padding-bottom: max(28px, calc(env(safe-area-inset-bottom, 0px) + 18px)) !important;
+        }
+        .page-visitas-v2 .modal-foot {
+          flex: 0 0 auto;
+          padding-bottom: max(15px, calc(env(safe-area-inset-bottom, 0px) + 10px));
+        }
+        .page-visitas-v2 #visitorPhone {
+          min-height: 46px;
+        }
       }
       @media (max-width: 620px) {
         .page-bases-datos .database-toolbar,
@@ -207,6 +247,17 @@
     document.querySelectorAll('[onclick*="addVisit"]').forEach((button) => button.addEventListener('click', sync, true));
   }
 
+  function enhanceCurrentVisitModal() {
+    const phone = document.getElementById('visitorPhone');
+    const phoneLabel = phone?.closest('div')?.querySelector('label');
+    if (phoneLabel) phoneLabel.textContent = 'Teléfono de la visita';
+
+    const viewport = document.querySelector('meta[name="viewport"]');
+    if (viewport && !viewport.content.includes('viewport-fit=cover')) {
+      viewport.content = `${viewport.content},viewport-fit=cover`;
+    }
+  }
+
   function enhanceResidentHouse() {
     const box = document.getElementById('userHouseBox');
     const original = document.getElementById('currentUserHouse');
@@ -279,6 +330,7 @@
     if (page === 'bases_datos.html') enhanceDatabases();
     if (page === 'reportes.html') { enhanceReportForm(); enhanceReportFilters(); }
     if (page === 'visitas.html') {
+      enhanceCurrentVisitModal();
       enhanceResidentHouse();
       enhanceVisitForm();
       enhanceResidentVisitModal();
