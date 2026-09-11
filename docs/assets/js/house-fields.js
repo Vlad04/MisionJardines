@@ -324,6 +324,15 @@
     observeRows(tbody, apply);
   }
 
+  function loadVisitQr() {
+    if (document.querySelector('script[data-visit-qr]')) return;
+    const script = document.createElement('script');
+    script.src = 'assets/js/visit-qr.js?v=20260910';
+    script.defer = true;
+    script.dataset.visitQr = 'true';
+    document.body.appendChild(script);
+  }
+
   function init() {
     injectStyles();
     const page = location.pathname.split('/').pop();
@@ -335,6 +344,7 @@
       enhanceVisitForm();
       enhanceResidentVisitModal();
       enhanceVisitFilters();
+      loadVisitQr();
     }
   }
 
