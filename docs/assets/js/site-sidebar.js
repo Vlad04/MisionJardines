@@ -22,6 +22,7 @@
     { label: '', items: [{ page: 'index.html', label: 'Inicio', icon: 'home' }] },
     { label: 'Comunidad', items: [
       { page: 'cuotas.html', label: 'Cuotas', icon: 'payment', roles: 'SUPER_ADMIN,ADMINISTRADOR,MESA_DIRECTIVA,CONDOMINO' },
+      { page: 'pagos.html', label: 'Pagos', icon: 'payment', roles: 'SUPER_ADMIN,ADMINISTRADOR,MESA_DIRECTIVA,CONDOMINO' },
       { page: 'bases_datos.html', label: 'Residentes', icon: 'residents', roles: 'SUPER_ADMIN,ADMINISTRADOR,MESA_DIRECTIVA,SEGURIDAD' },
       { page: 'mapa.html', label: 'Mapa', icon: 'map', roles: 'SUPER_ADMIN,ADMINISTRADOR,SEGURIDAD,CONDOMINO' },
       { page: 'visitas.html', label: 'Visitas', icon: 'visits', roles: 'SUPER_ADMIN,ADMINISTRADOR,SEGURIDAD,CONDOMINO' },
