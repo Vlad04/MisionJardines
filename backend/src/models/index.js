@@ -10,6 +10,7 @@ const PermisoAcceso = require('./PermisoAcceso');
 const Visita = require('./Visita');
 const VerificacionCuenta = require('./VerificacionCuenta');
 const SolicitudRol = require('./SolicitudRol');
+const PagoReportado = require('./PagoReportado');
 
 /*
  * Casa 1 --- N Usuarios
@@ -163,6 +164,34 @@ VerificacionCuenta.belongsTo(Casa, {
     as: 'casa'
 });
 
+/*
+ * Pagos reportados por residentes
+ */
+Casa.hasMany(PagoReportado, {
+    foreignKey: 'casaId',
+    as: 'pagosReportados'
+});
+
+PagoReportado.belongsTo(Casa, {
+    foreignKey: 'casaId',
+    as: 'casa'
+});
+
+Usuario.hasMany(PagoReportado, {
+    foreignKey: 'usuarioId',
+    as: 'pagosReportados'
+});
+
+PagoReportado.belongsTo(Usuario, {
+    foreignKey: 'usuarioId',
+    as: 'usuario'
+});
+
+PagoReportado.belongsTo(Usuario, {
+    foreignKey: 'validadoPorUsuarioId',
+    as: 'validadoPor'
+});
+
 module.exports = {
     Casa,
     Rol,
@@ -175,5 +204,6 @@ module.exports = {
     PermisoAcceso,
     Visita,
     VerificacionCuenta,
-    SolicitudRol
+    SolicitudRol,
+    PagoReportado
 };
